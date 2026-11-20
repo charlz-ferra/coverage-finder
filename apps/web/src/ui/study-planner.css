@@ -82,7 +82,8 @@
 .plan-options label.checked {
   background: #edf1e5;
 }
-.plan-options input {
+.plan-options input,
+.plan-name-option input {
   width: 18px;
   height: 18px;
   flex: none;
@@ -131,6 +132,16 @@
   max-width: 100%;
   background-color: var(--paper);
 }
+.plan-controls .plan-name-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+.plan-controls #plan-name-help {
+  font-size: 0.8rem;
+}
 .plan-controls .text-btn {
   display: block;
   margin: 8px auto 0;
@@ -154,6 +165,24 @@
   padding-top: 15px;
   border-top: 1px solid #cfd7c5;
   align-items: start;
+}
+.plan-csv-preview {
+  flex: 1 0 100%;
+  min-width: 0;
+  font-size: 0.84rem;
+  color: var(--green);
+}
+.plan-csv-preview summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.plan-csv-preview textarea {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  font: 0.8rem/1.5 monospace;
+  resize: vertical;
 }
 .plan-numbers div {
   flex: 1;

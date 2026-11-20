@@ -25,7 +25,7 @@ export interface Settings {
   vocabVersion: number
   lastTest?: TestResult
   lastReadAt?: number
-  studySelection?: StudySelection
+  studySelection?: Omit<StudySelection, 'skipLikelyNames'> & { skipLikelyNames?: boolean }
 }
 
 class LibraryDatabase extends Dexie {
@@ -105,10 +105,13 @@ export async function initialize() {
   })
 }
 
-export async function settings(): Promise<Settings> {
+export async function settings() {
   const item = await db.meta.get('library')
   if (!item) throw new Error('Локальная библиотека не инициализирована.')
-  return item
+  const selection = item.studySelection
+  const skipLikelyNames = selection && 'skipLikelyNames' in selection ? selection.skipLikelyNames : false
+  if (typeof skipLikelyNames !== 'boolean') throw new Error('Некорректная настройка пропуска имён.')
+  return { ...item, studySelection: selection && { ...selection, skipLikelyNames } }
 }
 
 export function vocabulary(profile: LibraryState['profile'], words: WordEntry[]) {

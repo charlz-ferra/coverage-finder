@@ -1,4 +1,5 @@
 import { isUnderstood, rankWords } from './metrics'
+import { likelyNameTokens } from './plan-names'
 import type { ParsedDoc, Pick } from './types'
 import { exportAnkiCsv } from './vocabulary'
 
@@ -40,6 +41,7 @@ function understoodCount(doc: ParsedDoc, known: ReadonlySet<string>, unknown: Re
 export function makeStudyPlan(
   selection: readonly SelectedDocument[], known: ReadonlySet<string>, limit: number,
   unknown: ReadonlySet<string> = new Set(),
+  { skipLikelyNames = false }: { skipLikelyNames?: boolean } = {},
 ): StudyPlan {
   const texts = [...new Map(selection.map(doc => [doc.id, doc])).values()]
   if (texts.length < 2) throw new Error('Выберите для плана хотя бы два разных текста.')
@@ -52,6 +54,7 @@ export function makeStudyPlan(
     owners.fill(index, offset, offset + doc.units.length)
     offset += doc.units.length
   }
+  const names = skipLikelyNames ? likelyNameTokens(units) : undefined
   const picks = rankWords(units, known, limit, unknown, (pick, exampleIndex, occurrences) => {
     const source = texts[owners[exampleIndex]]
     // Occurrences are unique unit indexes in text order, so changes of owner count distinct texts.
@@ -63,7 +66,7 @@ export function makeStudyPlan(
       previous = owner
     }
     return { ...pick, sourceId: source.id, sourceTitle: source.title, documentCount }
-  })
+  }, names)
 
   const afterKnown = new Set(known)
   const afterUnknown = new Set(unknown)

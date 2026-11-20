@@ -56,7 +56,9 @@ export function pickWords(doc: ParsedDoc, known: ReadonlySet<string>, k: number,
 export function rankWords<T>(
   units: readonly Unit[], known: ReadonlySet<string>, k: number, forceUnknown: ReadonlySet<string>,
   describe: (pick: Pick, exampleIndex: number, occurrences: readonly number[]) => T,
+  skipNames?: ReadonlySet<Token>,
 ): T[] {
+  const eligible = (token: Token) => !skipNames?.has(token) || forceUnknown.has(token.lemma)
   const remaining: Set<string>[] = []
   const candidates = new Map<string, Candidate>()
   let understood = 0
@@ -69,7 +71,8 @@ export function rankWords<T>(
         entry = { lemma: token.lemma, frequency: 0, immediate: 0, units: [] }
         candidates.set(token.lemma, entry)
       }
-      entry.frequency++
+      // Filtering controls cards, never the set of words still needed to understand a unit.
+      if (eligible(token)) entry.frequency++
       if (!missing.has(entry.lemma)) entry.units.push(index)
       missing.add(entry.lemma)
     }
@@ -81,25 +84,33 @@ export function rankWords<T>(
   const limit = Math.max(0, Math.floor(k))
   while (picks.length < limit && candidates.size) {
     let best: Candidate | undefined
-    for (const candidate of candidates.values()) if (!best || preferred(candidate, best)) best = candidate
+    for (const candidate of candidates.values()) {
+      if (candidate.frequency && (!best || preferred(candidate, best))) best = candidate
+    }
     if (!best) break
     candidates.delete(best.lemma)
-    let exampleIndex = best.units[0]
+    let exampleIndex = -1
     let exampleSize = Infinity
+    let word = ''
     for (const index of best.units) {
       const missing = remaining[index]
       if (missing.size < exampleSize) {
-        exampleIndex = index
-        exampleSize = missing.size
+        const unit = units[index]
+        const match = unit.tokens.find(t => t.lemma === best.lemma &&
+          (!skipNames || (eligible(t) && !isUnderstood(t, known, forceUnknown))))
+        if (match) {
+          word = unit.text.slice(match.start, match.end)
+          exampleIndex = index
+          exampleSize = missing.size
+        }
       }
       missing.delete(best.lemma)
       if (missing.size === 1) candidates.get(missing.values().next().value!)!.immediate++
     }
     understood += best.immediate
     const example = units[exampleIndex]
-    const form = example.tokens.find(token => token.lemma === best.lemma)!
     picks.push(describe({
-      lemma: best.lemma, word: example.text.slice(form.start, form.end), frequency: best.frequency,
+      lemma: best.lemma, word, frequency: best.frequency,
       unlocked: best.immediate, cSentAfter: understood / units.length, example: example.text,
     }, exampleIndex, best.units))
   }

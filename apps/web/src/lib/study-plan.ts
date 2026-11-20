@@ -4,11 +4,12 @@ import { db, documentById, initialize, readParsed, settings, vocabulary } from '
 export interface StudySelection {
   ids: string[]
   limit: number
+  skipLikelyNames: boolean
 }
 
 export function remainingSelection(selection: StudySelection, keep: (id: string) => boolean): StudySelection | undefined {
   const ids = selection.ids.filter(keep)
-  return ids.length >= 2 ? { ids, limit: selection.limit } : undefined
+  return ids.length >= 2 ? { ...selection, ids } : undefined
 }
 
 export async function getSavedStudySelection(): Promise<StudySelection | null> {
@@ -16,7 +17,10 @@ export async function getSavedStudySelection(): Promise<StudySelection | null> {
   return (await settings()).studySelection ?? null
 }
 
-export async function getStudyPlan(ids: readonly string[], limit = 25, save = false): Promise<StudyPlan> {
+export async function getStudyPlan(
+  ids: readonly string[], limit = 25, save = false, { skipLikelyNames } = { skipLikelyNames: false },
+): Promise<StudyPlan> {
+  if (typeof skipLikelyNames !== 'boolean') throw new Error('Некорректная настройка пропуска имён.')
   await initialize()
   // A single snapshot ensures imports, deletion and vocabulary changes cannot mix revisions.
   return db.transaction(save ? 'rw' : 'r', [db.meta, db.words, db.documents, db.sentences], async () => {
@@ -27,8 +31,8 @@ export async function getStudyPlan(ids: readonly string[], limit = 25, save = fa
       const record = await documentById(id)
       return { id, ...await readParsed(record) }
     }))
-    const plan = makeStudyPlan(docs, known, limit, unknown)
-    if (save) await db.meta.put({ ...meta, studySelection: { ids: uniqueIds, limit } })
+    const plan = makeStudyPlan(docs, known, limit, unknown, { skipLikelyNames })
+    if (save) await db.meta.put({ ...meta, studySelection: { ids: uniqueIds, limit, skipLikelyNames } })
     return plan
   })
 }
