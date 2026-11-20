@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import {
     loadLibrary,
     exportBackup,
@@ -19,6 +19,11 @@
   import Upload from './ui/Upload.svelte'
   import { download, readTextFile, wordCount, pct } from './ui/format'
   import './style.css'
+  import './workspace.css'
+  import { createCatalogPreferences } from './ui/catalog'
+  const catalog = $state(createCatalogPreferences())
+  let recentId = $state(''),
+    libraryScroll = 0
   let library = $state<LibraryState | null>(null),
     route = $state('library'),
     modal = $state(''),
@@ -38,18 +43,28 @@
   const nav = [
     { id: 'library', title: 'Библиотека', icon: 'library' },
     { id: 'dictionary', title: 'Мой словарь', icon: 'words' },
-    { id: 'settings', title: 'Настройки', icon: 'settings' },
+    { id: 'settings', title: 'Настройки', icon: 'gear' },
   ]
   function sync() {
     const hash = location.hash.slice(1)
+    const previous = route
+    if (previous === 'library') libraryScroll = window.scrollY
     route = hash.startsWith('text/') || nav.some((n) => n.id === hash) ? hash : 'library'
+    if (route.startsWith('text/')) recentId = route.slice(5)
     modal = ''
     error = ''
-    window.scrollTo(0, 0)
+    const destination = route === 'library' && previous.startsWith('text/') ? libraryScroll : 0
+    void tick().then(() => window.scrollTo(0, destination))
   }
   function go(id: string) {
-    if (location.hash === '#' + id) sync()
-    else location.hash = id
+    const hash = '#' + id
+    if (route === id || location.hash === hash) {
+      // The initial bare URL already shows the library. Avoid a delayed hashchange closing the next dialog.
+      if (location.hash !== hash) history.replaceState(history.state, '', hash)
+      sync()
+    } else {
+      location.hash = id
+    }
   }
   function notify(message: string) {
     toast = message
@@ -186,134 +201,154 @@
     document.getElementById('content')?.focus()
   }}>К содержимому</a
 >
-<header class="topbar">
-  <div class="top-inner">
-    <a class="brand" href="#library" aria-label="Coverage Finder — библиотека"
-      ><span class="brand-mark"><Icon name="book" size={24} /></span><span>Coverage Finder</span></a
-    >
-    <nav aria-label="Основная навигация">
-      {#each nav as item (item.id)}<a
+<div class="workspace">
+  <aside class="side-rail" aria-label="Рабочая область">
+    <a class="wordmark" href="#library" aria-label="Coverage Finder — библиотека">
+      <span class="brand-symbol"><Icon name="book" size={25} /></span><span>Coverage Finder</span>
+    </a>
+    <nav class="main-nav" aria-label="Основная навигация">
+      {#each nav as item (item.id)}
+        <a
           href={'#' + item.id}
           aria-current={route === item.id || (route.startsWith('text/') && item.id === 'library')
             ? 'page'
-            : undefined}><Icon name={item.icon} size={17} />{item.title}</a
-        >{/each}
+            : undefined}
+        >
+          <Icon name={item.icon} size={19} /><span>{item.title}</span>
+        </a>
+      {/each}
     </nav>
-    <span class="local"><Icon name="shield" size={17} /><span>Локальный режим</span></span>
-  </div>
-</header>
-<main id="content" tabindex="-1" class="main">
-  {#if fatal}<div class="empty">
-      <h1>Не удалось открыть библиотеку</h1>
-      <p>{fatal}</p>
-      <button class="primary" onclick={refresh}>Повторить</button>
+    <div class="rail-tools">
+      <h2>Инструменты</h2>
+      <button onclick={() => open('vocab')}><Icon name="upload" size={18} />Импорт словаря</button>
+      <button onclick={() => open('quiz')}><Icon name="test" size={18} />Тест словаря</button>
     </div>
-  {:else if !library}<p class="loading" role="status">Открываем локальную библиотеку…</p>
-  {:else if route.startsWith('text/')}
-    {#key route}<Reader
-        id={route.slice(5)}
-        version={library.vocabVersion}
-        home={() => go('library')}
-        {changed}
-        {notify}
-        remove={(id) => {
-          target = id
-          open('remove')
-        }}
-      />{/key}
-  {:else if route === 'dictionary'}<Dictionary
-      state={library}
-      upload={() => open('vocab')}
-      quiz={() => open('quiz')}
-      {changed}
-      {notify}
-    />
-  {:else if route === 'settings'}
-    <div class="page-heading">
-      <div>
-        <h1>Настройки</h1>
-        <p>Язык анализа, резервные копии и данные этого браузера.</p>
+    <div class="rail-bottom">
+      <button class="method-link" onclick={() => open('method')}
+        ><Icon name="info" size={18} />Методика расчёта</button
+      >
+      <div class="storage-status">
+        <span class="shield-tile"><Icon name="shield" size={20} /></span><span
+          ><strong>Локальный режим</strong><small>Данные на устройстве</small></span
+        >
       </div>
     </div>
-    <div class="settings-grid">
-      <section class="panel">
-        <div class="section-heading">
-          <h2>Хранение данных</h2>
-          <Icon name="shield" />
-        </div>
-        <p>
-          Тексты, словарь и история хранятся на этом устройстве. Скачайте JSON-копию, чтобы перенести
-          библиотеку или восстановить её после очистки браузера.
-        </p>
-        <div class="settings-action">
-          <div>
-            <h3>Резервная копия</h3>
-            <small>Весь словарь и разобранные тексты</small>
-          </div>
-          <button class="secondary" onclick={backup}
-            ><Icon name="download" size={16} />Скачать JSON</button
-          >
-        </div>
-        <div class="settings-action">
-          <div>
-            <h3>Восстановление</h3>
-            <small>Заменить данные содержимым копии</small>
-          </div>
-          <button class="secondary" onclick={() => restoreInput?.click()}
-            ><Icon name="upload" size={16} />Выбрать JSON</button
-          >
-        </div>
-        <input
-          type="file"
-          accept=".json,application/json"
-          aria-label="Резервная копия JSON"
-          hidden
-          bind:this={restoreInput}
-          onchange={(e) => {
-            backupFile = e.currentTarget.files?.[0] ?? null
-            if (backupFile) open('restore')
-            e.currentTarget.value = ''
+    <span class="mobile-local"><Icon name="shield" size={16} />Локальный режим</span>
+  </aside>
+  <main id="content" tabindex="-1" class="workspace-main">
+    {#if fatal}<div class="empty">
+        <h1>Не удалось открыть библиотеку</h1>
+        <p>{fatal}</p>
+        <button class="primary" onclick={refresh}>Повторить</button>
+      </div>
+    {:else if !library}<p class="loading" role="status">Открываем локальную библиотеку…</p>
+    {:else if route.startsWith('text/')}
+      {#key route}<Reader
+          id={route.slice(5)}
+          version={library.vocabVersion}
+          home={() => go('library')}
+          {changed}
+          {notify}
+          remove={(id) => {
+            target = id
+            open('remove')
           }}
-        />
-        <div class="settings-action">
-          <div>
-            <h3>Удаление данных</h3>
-            <small>Очистить библиотеку и словарь</small>
+        />{/key}
+    {:else if route === 'dictionary'}<Dictionary
+        state={library}
+        upload={() => open('vocab')}
+        quiz={() => open('quiz')}
+        {changed}
+        {notify}
+      />
+    {:else if route === 'settings'}
+      <div class="page-heading">
+        <div>
+          <h1>Настройки</h1>
+          <p>Язык анализа, резервные копии и данные этого браузера.</p>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <section class="panel">
+          <div class="section-heading">
+            <h2>Хранение данных</h2>
+            <Icon name="shield" />
           </div>
-          <button class="danger-btn" onclick={() => open('erase')}>Удалить всё</button>
-        </div>
-      </section>
-      <section class="panel">
-        <h2>Об анализе</h2>
-        <div class="settings-action"><span>Язык текстов</span><strong>Английский</strong></div>
-        <p>
-          Имена и исключённые слова считаются знакомыми. Их статус можно изменить в тексте или
-          словаре.
-        </p>
-        <button class="text-btn" onclick={() => open('method')}
-          ><Icon name="info" size={16} />Методика расчёта</button
-        >
-        <div class="settings-links">
-          <a href={import.meta.env.BASE_URL + 'data/LICENSE-DATA.md'} target="_blank" rel="noreferrer"
-            >Источники и лицензии данных</a
+          <p>
+            Тексты, словарь и история хранятся на этом устройстве. Скачайте JSON-копию, чтобы
+            перенести библиотеку или восстановить её после очистки браузера.
+          </p>
+          <div class="settings-action">
+            <div>
+              <h3>Резервная копия</h3>
+              <small>Весь словарь и разобранные тексты</small>
+            </div>
+            <button class="secondary" onclick={backup}
+              ><Icon name="download" size={16} />Скачать JSON</button
+            >
+          </div>
+          <div class="settings-action">
+            <div>
+              <h3>Восстановление</h3>
+              <small>Заменить данные содержимым копии</small>
+            </div>
+            <button class="secondary" onclick={() => restoreInput?.click()}
+              ><Icon name="upload" size={16} />Выбрать JSON</button
+            >
+          </div>
+          <input
+            type="file"
+            accept=".json,application/json"
+            aria-label="Резервная копия JSON"
+            hidden
+            bind:this={restoreInput}
+            onchange={(e) => {
+              backupFile = e.currentTarget.files?.[0] ?? null
+              if (backupFile) open('restore')
+              e.currentTarget.value = ''
+            }}
+          />
+          <div class="settings-action">
+            <div>
+              <h3>Удаление данных</h3>
+              <small>Очистить библиотеку и словарь</small>
+            </div>
+            <button class="danger-btn" onclick={() => open('erase')}>Удалить всё</button>
+          </div>
+        </section>
+        <section class="panel">
+          <h2>Об анализе</h2>
+          <div class="settings-action"><span>Язык текстов</span><strong>Английский</strong></div>
+          <p>
+            Имена и исключённые слова считаются знакомыми. Их статус можно изменить в тексте или
+            словаре.
+          </p>
+          <button class="text-btn" onclick={() => open('method')}
+            ><Icon name="info" size={16} />Методика расчёта</button
           >
-        </div>
-      </section>
-    </div>
-  {:else}<Library
-      state={library}
-      {upload}
-      open={(id) => go('text/' + id)}
-      vocab={() => open('vocab')}
-      quiz={() => open('quiz')}
-      details={() => open('method')}
-    />{/if}
-</main>
-<footer class="footer">
-  <span>Coverage Finder</span><small
-    ><Icon name="shield" size={14} />Ваши файлы остаются на устройстве</small
-  >
-</footer>
+          <div class="settings-links">
+            <a
+              href={import.meta.env.BASE_URL + 'data/LICENSE-DATA.md'}
+              target="_blank"
+              rel="noreferrer">Источники и лицензии данных</a
+            >
+          </div>
+        </section>
+      </div>
+    {:else}<Library
+        state={library}
+        {catalog}
+        updateCatalog={(patch) => Object.assign(catalog, patch)}
+        {recentId}
+        dictionary={() => go('dictionary')}
+        {upload}
+        open={(id) => go('text/' + id)}
+        vocab={() => open('vocab')}
+        quiz={() => open('quiz')}
+        details={() => open('method')}
+      />{/if}
+  </main>
+</div>
 {#if modal === 'vocab'}<Modal title="Загрузить словарь" onclose={close}
     ><VocabImport
       finish={(v) => {

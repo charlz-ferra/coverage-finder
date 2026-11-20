@@ -1,23 +1,20 @@
 <script lang="ts">
   import { importVocabulary, previewVocabulary, type LibraryState } from '../lib/client'
   import { readTextFile } from './format'
-  import Icon from './Icon.svelte'
+  import FileDrop from './FileDrop.svelte'
   let { finish }: { finish: (state: LibraryState) => void } = $props()
-  let input: HTMLInputElement,
-    content = $state(''),
+  let content = $state(''),
     name = $state(''),
     rows = $state<string[][]>([]),
     columns = $state(0),
     column = $state(0),
     skip = $state(false),
     error = $state(''),
-    busy = $state(false),
-    dragging = $state(false)
+    busy = $state(false)
   async function select(file?: File) {
     if (!file) return
     busy = true
     error = ''
-    rows = []
     try {
       const raw = await readTextFile(file)
       const preview = await previewVocabulary(raw)
@@ -25,14 +22,16 @@
       content = raw
       rows = preview.rows
       columns = preview.columnCount
-      column = 0
       name = file.name
-      skip = /^(word|lemma|front|english|слово|английский)$/i.test(rows[0]?.[0]?.trim() ?? '')
+      const namedColumn = rows[0].findIndex((field) =>
+        /^(word|lemma|front|english|слово|английский)$/i.test(field.trim()),
+      )
+      column = Math.max(namedColumn, 0)
+      skip = namedColumn >= 0
     } catch (e) {
-      error = (e as Error).message
+      error = file.name + ' — ' + (e as Error).message
     } finally {
       busy = false
-      input.value = ''
     }
   }
   async function save() {
@@ -52,34 +51,15 @@
   Загрузите текстовую выгрузку Anki или список знакомых английских слов. Для списка достаточно одного
   слова в строке.
 </p>
-<input
-  type="file"
+<FileDrop
+  label="Файл словаря"
   accept=".csv,.tsv,.txt"
-  aria-label="Файл словаря"
-  bind:this={input}
-  onchange={(e) => select(e.currentTarget.files?.[0])}
-  hidden
+  title="Выберите или перетащите файл"
+  caption="CSV, TXT или TSV"
+  selected={name}
+  {busy}
+  choose={(files) => select(files[0])}
 />
-<button
-  class:dragging
-  class="drop-area"
-  disabled={busy}
-  onclick={() => input.click()}
-  ondragover={(e) => {
-    e.preventDefault()
-    dragging = true
-  }}
-  ondragleave={() => (dragging = false)}
-  ondrop={(e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    dragging = false
-    void select(e.dataTransfer?.files[0])
-  }}
-  ><Icon name="upload" size={27} /><strong>{name || 'Выберите или перетащите файл'}</strong><small
-    >CSV, TXT или TSV</small
-  ></button
->
 {#if rows.length}
   <div class="form-line">
     <label
@@ -92,6 +72,17 @@
   <!-- svelte-ignore a11y_no_noninteractive_tabindex (Keyboard users scroll the file preview.) -->
   <div tabindex="0" role="region" aria-label="Предпросмотр CSV" class="preview-table">
     <table>
+      <thead
+        ><tr>
+          {#each Array(columns) as _, i (i)}
+            <th scope="col"
+              ><button class="column-name" aria-pressed={column === i} onclick={() => (column = i)}
+                >Колонка {i + 1}</button
+              ></th
+            >
+          {/each}
+        </tr></thead
+      >
       <tbody
         >{#each rows as row, i (i)}<tr class:muted={skip && i === 0}
             >{#each row as v, j (j)}<td class:highlighted={j === column}>{v || '—'}</td>{/each}</tr
@@ -120,3 +111,82 @@
       >{busy ? 'Обрабатываем…' : 'Импортировать слова'}</button
     >
   </div>{/if}
+
+<style>
+  .form-line {
+    margin: 0.45rem 0;
+    gap: 1rem;
+  }
+  .form-line label {
+    font-size: 0.875rem;
+  }
+  .form-line select {
+    min-height: 2.75rem;
+    background-color: #fffef9;
+  }
+  .form-line label.checkbox {
+    min-height: 2.75rem;
+    padding: 0.25rem 0;
+    gap: 0.4rem;
+    font-size: 0.875rem;
+  }
+  .checkbox input {
+    width: 1.1rem;
+    height: 1.1rem;
+  }
+  .preview-table {
+    border-radius: 0.6rem;
+    max-height: 12.5rem;
+    background: white;
+  }
+  .preview-table th {
+    position: sticky;
+    top: 0;
+    padding: 0;
+    background: #edf0e7;
+  }
+  .column-name {
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.4rem 0.7rem;
+    text-align: left;
+    color: #4b5f4d;
+    font-size: 0.85rem;
+  }
+  .column-name[aria-pressed='true'] {
+    color: #284835;
+    background: #e1ead8;
+    box-shadow: inset 0 -2px #617f55;
+  }
+  .column-name:focus-visible {
+    outline-offset: -3px;
+  }
+  .preview-table .highlighted {
+    background: #f2f6ed;
+    color: #263d2d;
+  }
+  .preview-table .muted {
+    opacity: 1;
+    color: #5d665d;
+    font-style: italic;
+  }
+  .guide {
+    margin-top: 1.1rem;
+    padding-top: 0.45rem;
+  }
+  .guide summary {
+    padding: 0.6rem 0;
+    min-height: 2.75rem;
+  }
+  .modal-actions {
+    margin-top: 0.85rem;
+  }
+  @media (max-width: 420px) {
+    .form-line {
+      gap: 0.45rem;
+    }
+    .form-line label.checkbox {
+      margin-left: auto;
+    }
+  }
+</style>

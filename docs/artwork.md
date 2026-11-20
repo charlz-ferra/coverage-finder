@@ -2,6 +2,8 @@
 
 Обложки оформлены для Coverage Finder. Репродукции картин и гравюра Джона Тенниела взяты из открытых изданий Standard Ebooks. Оригиналы указаны в выходных данных соответствующих изданий.
 
+На иллюстрации раскрытой книги видны начало первой главы «Алисы в Стране чудес» Льюиса Кэрролла и Белый Кролик с карманными часами. Переплёт, страницы и закладка нарисованы для Coverage Finder. Гравюру создал Джон Тенниел для первого издания 1865 года. [Гравюра в архиве Standard Ebooks](https://github.com/standardebooks/lewis-carroll_alices-adventures-in-wonderland_john-tenniel/blob/master/images/illustration-2.png) · [Текст первой главы](https://www.gutenberg.org/ebooks/11)
+
 - [Alice’s Adventures in Wonderland](https://github.com/standardebooks/lewis-carroll_alices-adventures-in-wonderland_john-tenniel/tree/master/images)
 - [The Adventures of Sherlock Holmes](https://github.com/standardebooks/arthur-conan-doyle_the-adventures-of-sherlock-holmes/tree/master/images)
 - [Treasure Island](https://github.com/standardebooks/robert-louis-stevenson_treasure-island/tree/master/images)

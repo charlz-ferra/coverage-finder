@@ -2,8 +2,15 @@ import type { LibraryDocument } from '../lib/client'
 
 const numbers = new Intl.NumberFormat('ru-RU')
 export const num = (value: number) => numbers.format(value)
-export const pct = (value: number) =>
-  new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value * 100) + '%'
+const percentages = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 })
+export function pct(value: number) {
+  const percent = value * 100
+  // Rounding a value just below a readiness threshold can contradict its label.
+  const next = [95, 98, 100].find((limit) => percent < limit && percent >= limit - 0.05)
+  if (next) return '<' + next + '%'
+  if (percent > 0 && percent < 0.05) return '<0,1%'
+  return percentages.format(percent) + '%'
+}
 export const bandNames = { ready: 'Можно читать', effort: 'С усилием', early: 'Пока рано' }
 export const statusNames = { known: 'Знаю', unknown: 'Не знаю', ignored: 'Исключено' }
 export const plural = (n: number, forms: [string, string, string]) => {
