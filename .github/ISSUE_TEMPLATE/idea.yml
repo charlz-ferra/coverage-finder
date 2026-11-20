@@ -1,0 +1,15 @@
+name: Предложить улучшение
+description: Чего не хватает при чтении книг или работе с субтитрами
+title: "Идея: "
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Что вы хотите сделать?
+      description: Расскажите на примере книги, эпизода или подборки. Личные файлы прикладывать не нужно.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: Как вы решаете эту задачу сейчас?
