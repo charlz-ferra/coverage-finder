@@ -2,14 +2,13 @@
   import Icon from './Icon.svelte'
   import { bandNames, cover, num, pct, plural, wordCount } from './format'
   import { rememberLayout, type CatalogLayout, type CatalogPreferences } from './catalog'
-  import type { LibraryState, LibraryDocument } from '../lib/client'
+  import { readerPageSize, type LibraryState, type LibraryDocument } from '../lib/client'
   import './library.css'
 
   let {
     state: library,
     catalog,
     updateCatalog,
-    recentId,
     open,
     upload,
     vocab,
@@ -20,7 +19,6 @@
     state: LibraryState
     catalog: CatalogPreferences
     updateCatalog: (patch: Partial<CatalogPreferences>) => void
-    recentId: string
     open: (id: string) => void
     upload: () => void
     vocab: () => void
@@ -43,8 +41,15 @@
     demo: library.documents.filter((d) => d.isDemo).length,
   })
   const ready = $derived(library.documents.filter((d) => d.stats.band === 'ready').length)
-  const recent = $derived(library.documents.find((d) => d.id === recentId))
-  const featured = $derived(library.profile === 'personal' ? (recent ?? library.documents[0]) : null)
+  const recent = $derived.by(() => {
+    let latest: LibraryDocument | undefined
+    for (const doc of library.documents) {
+      if (doc.reading && (!latest?.reading || doc.reading.updatedAt > latest.reading.updatedAt))
+        latest = doc
+    }
+    return latest
+  })
+  const featured = $derived(recent ?? (library.profile === 'personal' ? library.documents[0] : null))
   const activeFilters = $derived(Number(catalog.format !== 'all') + Number(catalog.band !== 'all'))
   const filtered = $derived.by(() => {
     const { collection, format, band, query, sort } = catalog
@@ -116,14 +121,17 @@
       >
       <h2 lang="en">{featured.title}</h2>
       <p>
-        {pct(featured.stats.cSent)} предложений со знакомыми словами · {wordCount(
-          featured.stats.tokens,
-        )}
+        {#if featured.reading}Страница {featured.reading.page + 1} из {Math.ceil(
+            featured.stats.sentences / readerPageSize,
+          )} ·
+        {/if}{pct(featured.stats.cSent)} предложений со знакомыми словами
       </p>
       <div class="banner-actions">
         <button class="banner-primary" onclick={() => open(featured.id)}
           ><Icon name="book" size={17} />{recent ? 'Продолжить чтение' : 'Открыть текст'}</button
-        ><button class="banner-secondary" onclick={vocab}>Обновить словарь</button>
+        ><button class="banner-secondary" onclick={vocab}
+          >{library.profile === 'demo' ? 'Загрузить словарь' : 'Обновить словарь'}</button
+        >
       </div>
     {:else}
       <span class="banner-label"
@@ -173,7 +181,7 @@
       <button
         class="catalog-help"
         title="Как считается рейтинг"
-          aria-label="О рейтинге"
+        aria-label="О рейтинге"
         onclick={details}><Icon name="info" size={16} /><span>О рейтинге</span></button
       >
       <div class="layout-switch" aria-label="Вид каталога">
@@ -322,7 +330,11 @@
                   {@render volume(doc)}
                   <span class="document-name">
                     {@render bookTitle(doc)}
-                    <span>{doc.author || 'Мой файл'} · {doc.kind.toUpperCase()} · {wordCount(doc.stats.tokens)}</span>
+                    <span
+                      >{doc.author || 'Мой файл'} · {doc.kind.toUpperCase()} · {wordCount(
+                        doc.stats.tokens,
+                      )}</span
+                    >
                   </span>
                 </div>
               </td>

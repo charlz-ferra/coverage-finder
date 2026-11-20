@@ -84,4 +84,56 @@ describe('local library workflow', () => {
     expect(await service.getProgress()).toEqual(history)
     expect(await service.getLastTest()).toMatchObject({ size: 0, falseAlarmRate: 1 })
   })
+
+  it('remembers positions for each text in both profiles, including backwards navigation and removal', async () => {
+    const demo = (await service.loadLibrary()).documents.find(doc => doc.stats.sentences > 20)!
+    expect(demo.reading).toBeUndefined()
+    const start = await service.rememberReading(demo.id)
+    expect(start.page).toBe(0)
+    const second = await service.rememberReading(demo.id, 1)
+    expect(second.updatedAt).toBeGreaterThan(start.updatedAt)
+    await service.importVocabulary('read')
+    const { documents } = await service.addFile(new File(['Hello. '.repeat(45)], 'Reading.txt'))
+    const user = documents.find(doc => !doc.isDemo)!
+    expect((await service.rememberReading(user.id, 99)).page).toBe(2)
+    await service.rememberReading(demo.id, 0)
+    const reopened = await service.rememberReading(user.id)
+    expect(reopened.page).toBe(2)
+    expect((await service.loadLibrary()).documents.find(doc => doc.id === demo.id)?.reading?.page).toBe(0)
+    const backup = await service.exportBackup()
+    const cleared = await service.eraseData()
+    expect(cleared.documents).toEqual([])
+    const restored = await service.restoreBackup(backup)
+    expect(restored.documents.find(doc => doc.id === user.id)?.reading).toEqual(reopened)
+    expect((await service.rememberReading(demo.id)).updatedAt).toBeGreaterThan(reopened.updatedAt)
+    await service.removeDocument(user.id)
+    await expect(service.rememberReading(user.id, 1)).rejects.toThrow()
+    expect((await service.loadLibrary()).documents.every(doc => doc.id !== user.id)).toBe(true)
+  })
+
+  it('restores older backups without reading positions and rolls back a damaged position', async () => {
+    const original = await service.loadLibrary()
+    await service.rememberReading(original.documents[0].id)
+    const backup = await service.exportBackup()
+    const data = JSON.parse(backup)
+    const touched = data.documents.find((doc: { reading?: unknown }) => doc.reading)
+    touched.reading.page = -1
+    await expect(service.restoreBackup(JSON.stringify(data))).rejects.toThrow('Копия')
+    expect(await service.exportBackup()).toBe(backup)
+    delete touched.reading
+    expect((await service.restoreBackup(JSON.stringify(data))).documents.every(doc => !doc.reading)).toBe(true)
+  })
+
+  it('serializes overlapping position updates without changing vocabulary progress', async () => {
+    const library = await service.loadLibrary()
+    const doc = library.documents.find(item => item.stats.sentences > 20)!
+    const [laterPage, firstPage] = await Promise.all([
+      service.rememberReading(doc.id, 1), service.rememberReading(doc.id, 0)
+    ])
+    expect(firstPage.updatedAt).toBeGreaterThan(laterPage.updatedAt)
+    const updated = await service.loadLibrary()
+    expect(updated.documents.find(item => item.id === doc.id)?.reading).toEqual(firstPage)
+    expect(updated.vocabVersion).toBe(library.vocabVersion)
+    expect(await service.getProgress()).toEqual([])
+  })
 })

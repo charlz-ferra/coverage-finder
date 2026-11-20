@@ -60,6 +60,11 @@
 .reader-classification .badge {
   font-size: 0.75rem;
 }
+.reader-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
 .reader-page .reader-metrics {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.5rem;

@@ -83,8 +83,8 @@ function csvCell(value: string): string {
   return '"' + safe.replaceAll('"', '""') + '"'
 }
 
-export function exportAnkiCsv(picks: readonly Pick[], sourceTitle = ''): string {
+export function exportAnkiCsv(picks: readonly (Pick & { sourceTitle?: string })[], sourceTitle = ''): string {
   const header = ['#separator:Comma', '#html:false', '#columns:Word,Lemma,Example,Source']
-  const rows = picks.map(pick => [pick.word, pick.lemma, pick.example, sourceTitle].map(csvCell).join(','))
+  const rows = picks.map(pick => [pick.word, pick.lemma, pick.example, pick.sourceTitle ?? sourceTitle].map(csvCell).join(','))
   return [...header, ...rows].join('\r\n') + '\r\n'
 }

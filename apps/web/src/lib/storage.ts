@@ -1,7 +1,10 @@
 import Dexie, { type Table } from 'dexie'
 import { analyze, parseText, type DocStats, type ParsedDoc } from '@coverage/core'
 import { demoLibrary, frequencyWords } from '@coverage/lang-en'
-import type { LibraryDocument, LibraryState, ProgressDay, TestResult, WordEntry } from './types'
+import { readerPageSize, type LibraryDocument, type LibraryState, type ProgressDay, type ReadingPosition, type TestResult, type WordEntry } from './types'
+import type { StudySelection } from './study-plan'
+
+const chunkSize = 128
 
 export interface DocumentRecord extends Omit<LibraryDocument, 'stats'> {
   hash: string
@@ -21,6 +24,8 @@ export interface Settings {
   profile: LibraryState['profile']
   vocabVersion: number
   lastTest?: TestResult
+  lastReadAt?: number
+  studySelection?: StudySelection
 }
 
 class LibraryDatabase extends Dexie {
@@ -49,17 +54,46 @@ export const sampleVocabulary = frequencyWords.slice(0, 3000)
 
 export async function saveDocument(document: DocumentRecord, units: ParsedDoc['units']) {
   const chunks: Chunk[] = []
-  for (let i = 0; i < units.length; i += 128) {
-    chunks.push({ docId: document.id, part: i / 128, units: units.slice(i, i + 128) })
+  for (let i = 0; i < units.length; i += chunkSize) {
+    chunks.push({ docId: document.id, part: i / chunkSize, units: units.slice(i, i + chunkSize) })
   }
-  await db.documents.add(document)
+  // A newer bundled demo may have fewer sentences than the copy it was exported from.
+  const reading = document.reading
+  await db.documents.add(reading ? {
+    ...document, reading: { ...reading, page: clampPage(reading.page, units.length) }
+  } : document)
   await db.sentences.bulkAdd(chunks)
 }
 
-export async function seedDemo(demo: typeof demoLibrary[number], addedAt: number) {
+export async function seedDemo(demo: typeof demoLibrary[number], addedAt: number, reading?: ReadingPosition) {
   const { text, ...metadata } = demo
   const parsed = parseText(text, 'txt', metadata.title)
-  await saveDocument({ ...metadata, isDemo: true, hash: 'demo:' + demo.id, addedAt }, parsed.units)
+  await saveDocument({ ...metadata, isDemo: true, hash: 'demo:' + demo.id, addedAt, reading }, parsed.units)
+}
+
+function clampPage(page: number, unitCount: number): number {
+  return Math.min(page, Math.max(0, Math.ceil(unitCount / readerPageSize) - 1))
+}
+
+/** Opening a reader touches its current position. Page changes are committed in request order. */
+export async function rememberReading(id: string, page?: number): Promise<ReadingPosition> {
+  if (page !== undefined && (!Number.isSafeInteger(page) || page < 0)) {
+    throw new Error('Некорректный номер страницы.')
+  }
+  return db.transaction('rw', db.documents, db.sentences, db.meta, async () => {
+    const [document, meta, lastChunk] = await Promise.all([
+      documentById(id), settings(),
+      db.sentences.where('[docId+part]').between([id, Dexie.minKey], [id, Dexie.maxKey]).last()
+    ])
+    const unitCount = lastChunk ? lastChunk.part * chunkSize + lastChunk.units.length : 0
+    const reading = {
+      page: clampPage(page ?? document.reading?.page ?? 0, unitCount),
+      updatedAt: Math.max(Date.now(), (meta.lastReadAt ?? 0) + 1)
+    }
+    await db.documents.update(id, { reading })
+    await db.meta.update(meta.key, { lastReadAt: reading.updatedAt })
+    return reading
+  })
 }
 
 export async function initialize() {
