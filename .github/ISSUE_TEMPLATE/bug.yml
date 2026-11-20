@@ -1,0 +1,25 @@
+name: Сообщить об ошибке
+description: Что вы делали и где результат оказался неожиданным
+title: "Ошибка: "
+body:
+  - type: markdown
+    attributes:
+      value: Достаточно короткого вымышленного примера. Не прикладывайте личные словари, книги, субтитры целиком или резервные копии JSON.
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Как повторить?
+      description: С какой страницы начали и что нажали? Если важно, укажите формат файла (EPUB, TXT, SRT или CSV).
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Что получилось и чего вы ожидали?
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Где открывали приложение?
+      placeholder: Например, Windows 11, Firefox, готовый ZIP или сайт
