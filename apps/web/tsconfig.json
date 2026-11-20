@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker", "ES2022.Intl"],
+    "allowJs": true,
+    "checkJs": true,
+    "types": ["vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "src/**/*.d.ts", "vite.config.ts"]
+}

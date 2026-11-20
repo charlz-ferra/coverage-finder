@@ -1,0 +1,17 @@
+{
+  "name": "@coverage/lang-en",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./morphology": "./src/morphology.ts",
+    "./demo": "./src/demo.ts",
+    "./test": "./src/test.ts"
+  },
+  "scripts": {
+    "check": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  }
+}

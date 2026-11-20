@@ -1,0 +1,26 @@
+name: Rebuild English data
+on: workflow_dispatch
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: python packages/lang-en/scripts/build_data.py
+      - name: Open a pull request for changed datasets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- data; then exit 0; fi
+          git checkout -b "data/rebuild-${GITHUB_RUN_ID}"
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add data
+          git commit -m "Rebuild English datasets"
+          git push origin HEAD
+          git diff --stat HEAD~1 HEAD > "$RUNNER_TEMP/data-summary.txt"
+          gh pr create --title "Rebuild English datasets" --body-file "$RUNNER_TEMP/data-summary.txt"

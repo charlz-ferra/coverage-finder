@@ -1,0 +1,63 @@
+name: Core benchmarks
+on:
+  pull_request:
+    paths:
+      - packages/core/**
+      - packages/lang-en/**
+      - data/en/**
+      - .github/workflows/bench.yml
+permissions:
+  contents: read
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @coverage/core bench --outputJson "$RUNNER_TEMP/head.json"
+      - name: Measure the target revision when it contains the suite
+        working-directory: baseline
+        run: |
+          if test -f packages/core/package.json && jq -e '.scripts.bench' packages/core/package.json > /dev/null; then
+            pnpm install --frozen-lockfile
+            pnpm --filter @coverage/core bench --outputJson "$RUNNER_TEMP/base.json"
+          fi
+      - name: Summarize timings
+        run: |
+          node scripts/bench-report.mjs "$RUNNER_TEMP/head.json" "$RUNNER_TEMP/base.json" > "$RUNNER_TEMP/bench.md"
+          cat "$RUNNER_TEMP/bench.md" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-summary
+          path: ${{ runner.temp }}/bench.md
+  comment:
+    needs: measure
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: benchmark-summary
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('node:fs')
+            const body = fs.readFileSync('bench.md', 'utf8')
+            await github.rest.issues.createComment({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number, body
+            })

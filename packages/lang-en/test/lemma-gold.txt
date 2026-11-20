@@ -1,0 +1,117 @@
+# Each line gives the intended dictionary form, then hand-labelled surface forms.
+# Homographs use the sense indicated on the left. The normalizer sees only the form.
+be am are is was were been being
+go goes went gone going
+have has had having
+do does did done doing
+study studies studied studying
+cry cries cried crying
+carry carries carried carrying
+stop stops stopped stopping
+plan plans planned planning
+sit sits sat sitting
+run runs ran running
+swim swims swam swum swimming
+lie lies lay lain lying
+lay lays laid laying
+see sees saw seen seeing
+say says said saying
+make makes made making
+take takes took taken taking
+come comes came coming
+become becomes became becoming
+write writes wrote written writing
+read reads reading
+fall falls fell fallen falling
+keep keeps kept keeping
+find finds found finding
+give gives gave given giving
+bring brings brought bringing
+buy buys bought buying
+bear bears bore borne bearing
+grow grows grew grown growing
+know knows knew known knowing
+teach teaches taught teaching
+think thinks thought thinking
+catch catches caught catching
+watch watches watched watching
+call calls called calling
+live lives lived living
+walk walks walked walking
+ask asks asked asking
+answer answers answered answering
+begin begins began begun beginning
+hide hides hid hidden hiding
+feel feels felt feeling
+forget forgets forgot forgotten forgetting
+prefer prefers preferred preferring
+travel travels travelled traveling
+smile smiles smiled smiling
+climb climbs climbed climbing
+hop hops hopped hopping
+hope hopes hoped hoping
+child children
+person people
+man men
+woman women
+tooth teeth
+foot feet
+mouse mice
+goose geese
+leaf leaves
+wolf wolves
+shelf shelves
+life lives
+knife knives
+potato potatoes
+church churches
+box boxes
+lady ladies
+hero heroes
+sheep sheep
+deer deer
+fish fish
+good better best
+bad worse worst
+fast faster fastest
+easy easier easiest
+happy happier happiest
+large larger largest
+small smaller smallest
+big bigger biggest
+warm warmer warmest
+deep deeper deepest
+quick quicker quickest
+quiet quieter quietest
+careful careful
+today today
+often often
+again again
+as as
+well well
+chair chairs
+table tables
+window windows
+village villages
+street streets
+garden gardens
+friend friends
+story stories
+book books
+bookcase bookcases
+country countries
+family families
+roof roofs
+photo photos
+safe safer safest
+price prices
+hour hours
+minute minutes
+beach beaches
+branch branches
+bridge bridges
+sky skies
+tree trees
+berry berries
+glass glass
+news news
