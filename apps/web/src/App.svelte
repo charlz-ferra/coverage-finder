@@ -8,10 +8,12 @@
     removeDocument,
     getLastTest,
     type LibraryState,
+    type ReadingPosition,
   } from './lib/client'
   import Icon from './ui/Icon.svelte'
   import Library from './ui/Library.svelte'
   import Reader from './ui/Reader.svelte'
+  import StudyPlanner from './ui/StudyPlanner.svelte'
   import Dictionary from './ui/Dictionary.svelte'
   import VocabImport from './ui/VocabImport.svelte'
   import Quiz from './ui/Quiz.svelte'
@@ -22,8 +24,7 @@
   import './workspace.css'
   import { createCatalogPreferences } from './ui/catalog'
   const catalog = $state(createCatalogPreferences())
-  let recentId = $state(''),
-    libraryScroll = 0
+  let libraryScroll = 0
   let library = $state<LibraryState | null>(null),
     route = $state('library'),
     modal = $state(''),
@@ -43,6 +44,7 @@
   const nav = [
     { id: 'library', title: 'Библиотека', icon: 'library' },
     { id: 'dictionary', title: 'Мой словарь', icon: 'words' },
+    { id: 'plan', title: 'План слов', icon: 'layers' },
     { id: 'settings', title: 'Настройки', icon: 'gear' },
   ]
   function sync() {
@@ -50,7 +52,6 @@
     const previous = route
     if (previous === 'library') libraryScroll = window.scrollY
     route = hash.startsWith('text/') || nav.some((n) => n.id === hash) ? hash : 'library'
-    if (route.startsWith('text/')) recentId = route.slice(5)
     modal = ''
     error = ''
     const destination = route === 'library' && previous.startsWith('text/') ? libraryScroll : 0
@@ -72,7 +73,16 @@
     messageTimer = setTimeout(() => (toast = ''), 4800)
   }
   function changed(value: LibraryState) {
+    refreshTicket++
     library = value
+  }
+  function readingPosition(id: string, reading: ReadingPosition) {
+    if (!library) return
+    const doc = library.documents.find((item) => item.id === id)
+    if (doc && (!doc.reading || doc.reading.updatedAt <= reading.updatedAt)) {
+      refreshTicket++
+      doc.reading = reading
+    }
   }
   function open(which: string) {
     error = ''
@@ -246,6 +256,7 @@
       {#key route}<Reader
           id={route.slice(5)}
           version={library.vocabVersion}
+          onposition={readingPosition}
           home={() => go('library')}
           {changed}
           {notify}
@@ -261,6 +272,8 @@
         {changed}
         {notify}
       />
+    {:else if route === 'plan'}
+      <StudyPlanner state={library} {upload} {notify} {changed} />
     {:else if route === 'settings'}
       <div class="page-heading">
         <div>
@@ -339,7 +352,6 @@
         state={library}
         {catalog}
         updateCatalog={(patch) => Object.assign(catalog, patch)}
-        {recentId}
         dictionary={() => go('dictionary')}
         {upload}
         open={(id) => go('text/' + id)}

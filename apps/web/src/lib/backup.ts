@@ -1,7 +1,8 @@
 import { tokenizeUnit, type ParsedDoc } from '@coverage/core'
 import { demoLibrary } from '@coverage/lang-en'
 import { db, initialize, loadLibrary, readParsed, saveDocument, seedDemo, settings, type DocumentRecord } from './storage'
-import type { LibraryState, ProgressDay, TestResult, WordEntry } from './types'
+import type { LibraryState, ProgressDay, ReadingPosition, TestResult, WordEntry } from './types'
+import { remainingSelection, type StudySelection } from './study-plan'
 
 const schema = 'coverage-finder'
 const invalid = () => new Error('Копия повреждена или имеет неизвестный формат. Проверьте выбранный JSON-файл.')
@@ -15,21 +16,21 @@ const text = (value: unknown, max: number): value is string =>
 export async function exportBackup(): Promise<string> {
   await initialize()
   return db.transaction('r', db.tables, async () => {
-    const { profile, lastTest } = await settings()
+    const { profile, lastTest, studySelection } = await settings()
     const progress = await db.progress.toArray()
     const words = await db.words.toArray()
     const documents = []
     for (const doc of await db.documents.toArray()) {
-      if (doc.isDemo) documents.push({ demo: doc.id, addedAt: doc.addedAt })
+      if (doc.isDemo) documents.push({ demo: doc.id, addedAt: doc.addedAt, reading: doc.reading })
       else {
         const { units } = await readParsed(doc)
         documents.push({
-          id: doc.id, title: doc.title, hash: doc.hash, kind: doc.kind, addedAt: doc.addedAt,
+          id: doc.id, title: doc.title, hash: doc.hash, kind: doc.kind, addedAt: doc.addedAt, reading: doc.reading,
           units: units.map(({ text, start, end }) => ({ text, start, end }))
         })
       }
     }
-    return JSON.stringify({ schema, version: 1, profile, words, documents, progress, lastTest })
+    return JSON.stringify({ schema, version: 1, profile, words, documents, progress, lastTest, studySelection })
   })
 }
 
@@ -46,6 +47,21 @@ function readTest(value: unknown): TestResult | undefined {
       typeof value.falseAlarmRate !== 'number' || !Number.isFinite(value.falseAlarmRate) ||
       value.falseAlarmRate < 0 || value.falseAlarmRate > 1) throw invalid()
   return { size: value.size, answeredAt: value.answeredAt, falseAlarmRate: value.falseAlarmRate }
+}
+
+function readPosition(value: unknown): ReadingPosition | undefined {
+  if (value === undefined) return
+  if (!object(value) || !timestamp(value.page) || !timestamp(value.updatedAt) ||
+      value.updatedAt > 8.64e15) throw invalid()
+  return { page: value.page, updatedAt: value.updatedAt }
+}
+
+function readSelection(value: unknown, documentIds: Set<string>): StudySelection | undefined {
+  if (value === undefined) return
+  if (!object(value) || !Array.isArray(value.ids) || !value.ids.every(id => text(id, 1000)) ||
+      value.ids.length !== new Set(value.ids).size ||
+      !timestamp(value.limit) || value.limit < 1 || value.limit > 40) throw invalid()
+  return remainingSelection({ ids: value.ids, limit: value.limit }, id => documentIds.has(id))
 }
 
 function readWord(value: unknown): WordEntry {
@@ -94,24 +110,28 @@ export async function restoreBackup(json: string): Promise<LibraryState> {
   if (words.length !== new Set(words.map(word => word.lemma)).size) throw invalid()
   const documents = data.documents.map((value: unknown) => {
     if (!object(value)) throw invalid()
+    const reading = readPosition(value.reading)
     if ('demo' in value) {
       const demo = demoLibrary.find(doc => doc.id === value.demo)
       if (!demo || !timestamp(value.addedAt)) throw invalid()
-      return { id: demo.id, demo, addedAt: value.addedAt }
+      return { id: demo.id, demo, addedAt: value.addedAt, reading }
     }
     const upload = readUserDocument(value)
-    return { id: upload.record.id, upload }
+    return { id: upload.record.id, upload, reading }
   })
-  if (documents.length !== new Set(documents.map(doc => doc.id)).size) throw invalid()
+  const documentIds = new Set(documents.map(doc => doc.id))
+  if (documents.length !== documentIds.size) throw invalid()
+  const studySelection = readSelection(data.studySelection, documentIds)
   await db.transaction('rw', db.tables, async () => {
     const currentVersion = (await db.meta.get('library'))?.vocabVersion ?? 0
     for (const table of db.tables) await table.clear()
-    await db.meta.add({ key: 'library', profile, lastTest, vocabVersion: currentVersion + 1 })
+    const lastReadAt = documents.reduce((latest, doc) => Math.max(latest, doc.reading?.updatedAt ?? 0), 0)
+    await db.meta.add({ key: 'library', profile, lastTest, lastReadAt, studySelection, vocabVersion: currentVersion + 1 })
     await db.words.bulkAdd(words)
     await db.progress.bulkAdd(progress)
     for (const item of documents) {
-      if (item.demo) await seedDemo(item.demo, item.addedAt)
-      else if (item.upload) await saveDocument(item.upload.record, item.upload.units)
+      if (item.demo) await seedDemo(item.demo, item.addedAt, item.reading)
+      else if (item.upload) await saveDocument({ ...item.upload.record, reading: item.reading }, item.upload.units)
     }
   })
   return loadLibrary()

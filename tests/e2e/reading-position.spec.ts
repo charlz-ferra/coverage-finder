@@ -1,0 +1,26 @@
+import { expect, test } from '@playwright/test'
+
+test('resumes a demo book at the last visited page after reload and from the library', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: "Открыть Alice's Adventures in Wonderland", exact: true }).click()
+  const pagination = page.locator('.reader-pagination')
+  await expect(pagination).toContainText('Страница 1 из')
+  const firstParagraph = page.locator('.reading-text p').first()
+  const onPageOne = await firstParagraph.innerText()
+  await pagination.getByRole('button', { name: 'Дальше' }).click()
+  await expect(pagination).toContainText('Страница 2 из')
+  const onPageTwo = await firstParagraph.innerText()
+  expect(onPageTwo).not.toEqual(onPageOne)
+
+  await page.reload()
+  await expect(pagination).toContainText('Страница 2 из')
+  await expect(firstParagraph).toHaveText(onPageTwo)
+  await page.getByRole('button', { name: 'Библиотека', exact: true }).click()
+  await page.reload()
+  await page.getByRole('button', { name: 'Продолжить чтение', exact: true }).click()
+  await expect(firstParagraph).toHaveText(onPageTwo)
+  await pagination.getByRole('button', { name: 'Назад' }).click()
+  await expect(pagination).toContainText('Страница 1 из')
+  await page.reload()
+  await expect(firstParagraph).toHaveText(onPageOne)
+})

@@ -1,4 +1,4 @@
-import type { DocStats, ParsedDoc, Pick, Token } from './types'
+import type { DocStats, ParsedDoc, Pick, Token, Unit } from './types'
 
 const empty: ReadonlySet<string> = new Set<string>()
 
@@ -48,10 +48,19 @@ function preferred(a: Candidate, b: Candidate) {
 }
 
 export function pickWords(doc: ParsedDoc, known: ReadonlySet<string>, k: number, forceUnknown: ReadonlySet<string> = empty): Pick[] {
+  return rankWords(doc.units, known, k, forceUnknown, pick => pick)
+}
+
+// Keep the greedy policy identical for a single text and a group. A group additionally
+// uses the original unit index to attribute each example, even when two units have the same text.
+export function rankWords<T>(
+  units: readonly Unit[], known: ReadonlySet<string>, k: number, forceUnknown: ReadonlySet<string>,
+  describe: (pick: Pick, exampleIndex: number, occurrences: readonly number[]) => T,
+): T[] {
   const remaining: Set<string>[] = []
   const candidates = new Map<string, Candidate>()
   let understood = 0
-  for (const [index, unit] of doc.units.entries()) {
+  for (const [index, unit] of units.entries()) {
     const missing = new Set<string>()
     for (const token of unit.tokens) {
       if (isUnderstood(token, known, forceUnknown)) continue
@@ -68,7 +77,7 @@ export function pickWords(doc: ParsedDoc, known: ReadonlySet<string>, k: number,
     if (!missing.size) understood++
     if (missing.size === 1) candidates.get(missing.values().next().value!)!.immediate++
   }
-  const picks: Pick[] = []
+  const picks: T[] = []
   const limit = Math.max(0, Math.floor(k))
   while (picks.length < limit && candidates.size) {
     let best: Candidate | undefined
@@ -87,12 +96,12 @@ export function pickWords(doc: ParsedDoc, known: ReadonlySet<string>, k: number,
       if (missing.size === 1) candidates.get(missing.values().next().value!)!.immediate++
     }
     understood += best.immediate
-    const example = doc.units[exampleIndex]
+    const example = units[exampleIndex]
     const form = example.tokens.find(token => token.lemma === best.lemma)!
-    picks.push({
+    picks.push(describe({
       lemma: best.lemma, word: example.text.slice(form.start, form.end), frequency: best.frequency,
-      unlocked: best.immediate, cSentAfter: understood / doc.units.length, example: example.text,
-    })
+      unlocked: best.immediate, cSentAfter: understood / units.length, example: example.text,
+    }, exampleIndex, best.units))
   }
   return picks
 }

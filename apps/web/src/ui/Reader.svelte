@@ -6,8 +6,11 @@
   import {
     getDetail,
     exportWords,
+    readerPageSize,
+    rememberReading,
     setWord,
     type Detail,
+    type ReadingPosition,
     type ReadingUnit,
     type WordStatus,
     type LibraryState,
@@ -20,6 +23,7 @@
     changed,
     notify,
     remove,
+    onposition,
   }: {
     id: string
     version: number
@@ -27,10 +31,13 @@
     changed: (s: LibraryState) => void
     notify: (s: string) => void
     remove: (id: string) => void
+    onposition?: (id: string, reading: ReadingPosition) => void
   } = $props()
   let detail = $state<Detail | null>(null),
     limit = $state(25),
     page = $state(0),
+    requestedPage = $state<number | null>(null),
+    savingPage = $state(false),
     view = $state('text'),
     exporting = $state(false),
     selected = $state<ReadingUnit['tokens'][number] | null>(null),
@@ -64,12 +71,24 @@
   }
 
   onMount(() => {
+    let mounted = true
+    const docId = id
+    void rememberReading(docId).then((reading) => {
+      onposition?.(docId, reading)
+      if (mounted) requestedPage = reading.page
+    }).catch(() => {
+      if (mounted) {
+        notify('Не удалось восстановить место чтения.')
+        requestedPage = 0
+      }
+    })
     try {
       const saved = localStorage.getItem('coverage-finder:reading-size')
       if (saved === 'compact' || saved === 'regular' || saved === 'large') fontSize = saved
     } catch {
       /* The reader also works with storage disabled. */
     }
+    return () => { mounted = false; request++ }
   })
   function changeSize(size: FontSize) {
     fontSize = size
@@ -92,22 +111,36 @@
     event.preventDefault()
     words[next]?.focus()
   }
-  function changePage(next: number) {
-    page = next
+  async function changePage(next: number) {
+    if (savingPage || requestedPage !== page || next === page) return
+    const docId = id
+    savingPage = true
+    try {
+      const reading = await rememberReading(docId, next)
+      onposition?.(docId, reading)
+      requestedPage = reading.page
+    } catch {
+      notify('Не удалось сохранить новую страницу. Попробуйте ещё раз.')
+      return
+    } finally {
+      savingPage = false
+    }
     focusedWord = null
     paper?.scrollIntoView({ block: 'start' })
   }
   $effect(() => {
-    const args = [id, limit, page, version] as const
+    if (requestedPage === null) return
+    const args = [id, limit, requestedPage, version] as const
     void refresh(...args)
   })
   async function refresh(docId: string, k: number, pageNo: number, _version: number) {
     void _version
     const ticket = ++request
     try {
-      const data = await getDetail(docId, k, pageNo * 20, 20)
+      const data = await getDetail(docId, k, pageNo * readerPageSize, readerPageSize)
       if (ticket === request) {
         detail = data
+        page = pageNo
         error = ''
       }
     } catch (e) {
@@ -167,6 +200,9 @@
         <div class="reader-classification">
           <span>{doc.isDemo ? 'Демо-отрывок' : 'Мой файл'} · {doc.kind.toUpperCase()}</span>
           <span class={'badge ' + doc.stats.band}><i></i>{bandNames[doc.stats.band]}</span>
+          {#if detail.totalUnits > readerPageSize}
+            <span class="reader-location"><Icon name="bookmark" size={14} />Стр. {page + 1} из {Math.ceil(detail.totalUnits / readerPageSize)}</span>
+          {/if}
         </div>
         <h1 lang="en">{doc.title}</h1>
         <p>
@@ -226,7 +262,7 @@
           слово.</span
         >
         <div class="reading-text" lang="en" class:plain={view === 'plain'} data-size={fontSize}>
-          {#each detail.units as unit, unitIndex (page * 20 + unitIndex)}
+          {#each detail.units as unit, unitIndex (page * readerPageSize + unitIndex)}
             <p class:subtitle-line={unit.start !== undefined}>
               {#if unit.start !== undefined}<span class="timestamp">{time(unit.start)}</span
                 >{/if}{#each wordGroups(unit) as group (group.start)}<span class="reader-word-group"
@@ -250,15 +286,15 @@
             </p>
           {/each}
         </div>
-        {#if detail.totalUnits > 20}
+        {#if detail.totalUnits > readerPageSize}
           <div class="pagination reader-pagination">
-            <button class="secondary" disabled={!page} onclick={() => changePage(page - 1)}
+            <button class="secondary" disabled={!page || savingPage || page !== requestedPage} onclick={() => changePage(page - 1)}
               >Назад</button
             >
-            <span>Страница {page + 1} из {Math.ceil(detail.totalUnits / 20)}</span>
+            <span aria-live="polite">Страница {page + 1} из {Math.ceil(detail.totalUnits / readerPageSize)}</span>
             <button
               class="secondary"
-              disabled={(page + 1) * 20 >= detail.totalUnits}
+              disabled={(page + 1) * readerPageSize >= detail.totalUnits || savingPage || page !== requestedPage}
               onclick={() => changePage(page + 1)}>Дальше</button
             >
           </div>

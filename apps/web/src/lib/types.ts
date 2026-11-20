@@ -1,6 +1,14 @@
 import type { DocStats, ParsedDoc, Pick as WordPick } from '@coverage/core'
 
 export type WordStatus = 'known' | 'unknown' | 'ignored'
+export const readerPageSize = 20
+
+export interface ReadingPosition {
+  /** Zero-based page in the document's ordered reading units. */
+  page: number
+  updatedAt: number
+}
+
 export interface ProgressDay {
   day: string
   knownCount: number
@@ -29,6 +37,7 @@ export interface LibraryDocument {
   kind: ParsedDoc['kind']
   isDemo: boolean
   addedAt: number
+  reading?: ReadingPosition
   stats: DocStats
 }
 

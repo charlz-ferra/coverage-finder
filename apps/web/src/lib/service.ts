@@ -1,7 +1,8 @@
 import { analyze, exportAnkiCsv, maxFileBytes, parse, parseVocabularyRows, pickWords, vocabularyFromRows, type ParsedDoc } from '@coverage/core'
 import { estimateVocabulary, vocabularyTest } from '@coverage/lang-en'
-import { db, documentById, initialize, libraryDocument, loadLibrary, readParsed, saveDocument, settings, vocabulary } from './storage'
+import { db, documentById, initialize, libraryDocument, loadLibrary, readParsed, rememberReading, saveDocument, settings, vocabulary } from './storage'
 import { exportBackup, restoreBackup } from './backup'
+import { getSavedStudySelection, getStudyPlan, remainingSelection } from './study-plan'
 import type { Detail, LibraryState, TestResult, WordEntry, WordStatus } from './types'
 
 const duplicate = () => new Error('Этот файл уже есть в библиотеке.')
@@ -44,10 +45,14 @@ async function commitPrepared() {
 
 async function removeDocument(id: string) {
   await initialize()
-  await db.transaction('rw', db.documents, db.sentences, db.stats, async () => {
+  await db.transaction('rw', db.documents, db.sentences, db.stats, db.meta, async () => {
     await db.documents.delete(id)
     await db.sentences.where({ docId: id }).delete()
     await db.stats.delete(id)
+    const meta = await settings()
+    if (meta.studySelection?.ids.includes(id)) {
+      await db.meta.put({ ...meta, studySelection: remainingSelection(meta.studySelection, key => key !== id) })
+    }
   })
   return loadLibrary()
 }
@@ -148,6 +153,8 @@ async function eraseData() {
 }
 
 export const service = {
+  rememberReading,
+  getSavedStudySelection, getStudyPlan,
   loadLibrary, addFile, prepareFile, commitPrepared, removeDocument, setWord, previewVocabulary, importVocabulary,
   getTest, applyTest, getLastTest, getProgress, getDetail, exportWords, exportBackup, restoreBackup, eraseData
 }

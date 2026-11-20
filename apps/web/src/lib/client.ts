@@ -4,6 +4,7 @@ import type { WordStatus } from './types'
 
 export type { WordEntry, WordStatus, LibraryDocument, LibraryState, ReadingUnit, ProgressDay, TestResult, Detail } from './types'
 export type { DocStats } from '@coverage/core'
+export type { StudyPlan, StudyPlanDocument, StudyPlanPick } from '@coverage/core'
 
 const createWorker = () => new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
 function workerConnection() {
@@ -29,7 +30,13 @@ function workerConnection() {
 }
 
 const worker = workerConnection()
+export type { StudySelection } from './study-plan'
+export const getSavedStudySelection = () => worker.call(api => api.getSavedStudySelection())
+export const getStudyPlan = (ids: readonly string[], limit = 25, save = false) =>
+  worker.call(api => api.getStudyPlan([...ids], limit, save))
 export const loadLibrary = () => worker.call(api => api.loadLibrary())
+export const rememberReading = (id: string, page?: number) => worker.call(api => api.rememberReading(id, page))
+export { readerPageSize, type ReadingPosition } from './types'
 export const removeDocument = (id: string) => worker.call(api => api.removeDocument(id))
 export const setWord = (lemma: string, status: WordStatus) => worker.call(api => api.setWord(lemma, status))
 export const previewVocabulary = (text: string) => worker.call(api => api.previewVocabulary(text))
