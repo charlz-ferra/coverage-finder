@@ -6,6 +6,7 @@
     setWord,
     type LibraryState,
     type StudyPlan,
+    type StudySelection,
   } from '../lib/client'
   import Icon from './Icon.svelte'
   import { bandNames, cover, download, num, pct, plural, wordCount } from './format'
@@ -23,16 +24,18 @@
     changed: (state: LibraryState) => void
   } = $props()
 
-  type Request = { ids: string[]; limit: number; save: boolean }
+  type Request = StudySelection & { save: boolean }
   let request = $state.raw<Request | null>(null)
   let result = $state.raw<StudyPlan | null>(null)
   let selected = $state<string[]>([]),
     limit = $state(20),
+    skipLikelyNames = $state(false),
     query = $state('')
   let editing = $state(true),
     starting = $state(true),
     busy = $state(false),
     savingWord = $state(false),
+    previewCsv = $state(false),
     error = $state('')
   let resultHeading = $state<HTMLHeadingElement>()
   let lastRequest: Request | null = null
@@ -60,6 +63,7 @@
         if (live && saved) {
           selected = saved.ids
           limit = saved.limit
+          skipLikelyNames = saved.skipLikelyNames
           editing = false
           request = { ...saved, save: false }
         }
@@ -95,7 +99,7 @@
     lastRequest = job
     busy = true
     error = ''
-    getStudyPlan([...job.ids], job.limit, save)
+    getStudyPlan([...job.ids], job.limit, save, { skipLikelyNames: job.skipLikelyNames })
       .then(async (data) => {
         if (!live) return
         result = data
@@ -121,15 +125,17 @@
   }
   function calculate() {
     if (chosen.length < 2) return
+    previewCsv = false
     editing = false
     result = null
-    request = { ids: [...chosen], limit, save: true }
+    request = { ids: [...chosen], limit, skipLikelyNames, save: true }
     window.scrollTo(0, 0)
   }
   function edit() {
     if (request) {
       selected = [...request.ids]
       limit = request.limit
+      skipLikelyNames = request.skipLikelyNames
     }
     query = ''
     error = ''
@@ -227,6 +233,14 @@
           >{#each sizes as n (n)}<option value={n}>{wordCount(n)}</option>{/each}</select
         ></label
       >
+      <label class="plan-name-option">
+        <input type="checkbox" bind:checked={skipLikelyNames} aria-describedby="plan-name-help" />
+        Пропускать вероятные имена
+      </label>
+      <p id="plan-name-help">
+        Только для этого плана: пропуск не отмечает имя как знакомое. Имена, которые вы отметили как
+        незнакомые, по-прежнему участвуют в подборе.
+      </p>
       <button class="primary full" disabled={chosen.length < 2} onclick={calculate}
         >Составить план</button
       >
@@ -255,6 +269,7 @@
         {documentCount(result.documents.length)} · {unitCount(result.sentences)}. Прогноз по текущему
         словарю.
       </p>
+      <p role="status">Пропуск вероятных имён: {request?.skipLikelyNames ? 'включён' : 'выключен'}</p>
     </div>
     {#if result.picks.length}<button
         class="primary"
@@ -275,6 +290,15 @@
         <dd>+{num(gain)}</dd>
       </div>
     </dl>
+    {#if result.picks.length}
+      <details class="plan-csv-preview" bind:open={previewCsv}>
+        <summary>Посмотреть CSV</summary>
+        {#if previewCsv}
+          <p>Это содержимое скачиваемого файла. Перед полем, похожим на формулу, добавлен защитный апостроф.</p>
+          <textarea readonly aria-label="Содержимое CSV для Anki" rows="5" value={result.csv}></textarea>
+        {/if}
+      </details>
+    {/if}
   </section>
   <div class="plan-results">
     <section class="plan-words">
@@ -295,10 +319,11 @@
                   /></summary
                 >
                 <p lang="en">{pick.example}</p>
-                <small
-                  >{pick.sourceTitle} · Встречается в {pick.documentCount} из {result.documents
-                    .length} текстов</small
-                >
+                <small>
+                  Словоформа: <span class="plan-word-form" lang="en">{pick.word}</span><br />
+                  Источник: <span class="plan-word-source">{pick.sourceTitle}</span> · Встречается в
+                  {pick.documentCount} из {result.documents.length} текстов
+                </small>
                 <div class="plan-word-actions">
                   <button
                     class="secondary"
@@ -318,7 +343,7 @@
           {/each}
         </ol>
       {:else}<p class="plan-note">
-          Все слова выбранных текстов знакомы или исключены. Можно выбрать другие тексты.
+          Для выбранных текстов и настроек слов не нашлось. Попробуйте изменить подборку.
         </p>{/if}
     </section>
     <section class="plan-impact">

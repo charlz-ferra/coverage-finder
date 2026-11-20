@@ -61,7 +61,9 @@ function readSelection(value: unknown, documentIds: Set<string>): StudySelection
   if (!object(value) || !Array.isArray(value.ids) || !value.ids.every(id => text(id, 1000)) ||
       value.ids.length !== new Set(value.ids).size ||
       !timestamp(value.limit) || value.limit < 1 || value.limit > 40) throw invalid()
-  return remainingSelection({ ids: value.ids, limit: value.limit }, id => documentIds.has(id))
+  const { skipLikelyNames = false } = value
+  if (typeof skipLikelyNames !== 'boolean') throw invalid()
+  return remainingSelection({ ids: value.ids, limit: value.limit, skipLikelyNames }, id => documentIds.has(id))
 }
 
 function readWord(value: unknown): WordEntry {

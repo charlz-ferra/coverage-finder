@@ -32,8 +32,8 @@ function workerConnection() {
 const worker = workerConnection()
 export type { StudySelection } from './study-plan'
 export const getSavedStudySelection = () => worker.call(api => api.getSavedStudySelection())
-export const getStudyPlan = (ids: readonly string[], limit = 25, save = false) =>
-  worker.call(api => api.getStudyPlan([...ids], limit, save))
+export const getStudyPlan = (ids: readonly string[], limit = 25, save = false, options = { skipLikelyNames: false }) =>
+  worker.call(api => api.getStudyPlan([...ids], limit, save, options))
 export const loadLibrary = () => worker.call(api => api.loadLibrary())
 export const rememberReading = (id: string, page?: number) => worker.call(api => api.rememberReading(id, page))
 export { readerPageSize, type ReadingPosition } from './types'
